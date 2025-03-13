@@ -1,4 +1,4 @@
-# Termux2App
+# Termux2App 📱
 
 ## About
 Termux2App is a Bash script designed for **Termux**, allowing users to manage and launch Android applications via the terminal. With Termux2App, you can:
