@@ -1,0 +1,598 @@
+#!/data/data/com.termux/files/usr/bin/bash
+
+# DECLARE CACHE FILE
+APP_FILE="$HOME/.cache/BuriXon-code/apk/apps.json"
+mkdir -p "$(dirname "$APP_FILE")"
+[ ! -f "$APP_FILE" ] && echo "{}" > "$APP_FILE"
+
+# COLOR USED IN SCRIPT
+NC="\e[0m"
+R="\e[31m"
+BR="\e[1;31m"
+G="\e[32m"
+BG="\e[1;32m"
+Y="\e[33m"
+BY="\e[1;33m"
+C="\e[36m"
+BC="\e[1;36m"
+URL="\e[4;36m"
+
+# HELP HANDLER
+help_menu() {
+	echo
+	echo -e "${BC}[?]${NC} Usage: $(basename "$0") [options]"
+	echo -e "\n${BC}[?]${NC} Options:\n"
+	echo -e "  (none) 	  Open interactive menu"
+	echo -e "  help		  Show this help message"
+	echo -e "  open (name)	  Open specified app"
+	echo -e "  add		  Add a new application entry"
+	echo -e "  del		  Remove an application from the list"
+	echo -e "  edit		  Allow user to edit app data"
+	echo -e "  info		  Show detailed info about selected app"
+	echo -e "  add help	  Show detailed instructions for adding applications"
+	echo -e "  del help	  Show detailed instructions for removing applications"
+	echo -e "  edit help	  Show detailed instructions for editing aplications"
+	echo -e "  info help 	  Show detailed instructions for showing app info"
+	echo -e "\n${BC}[?]${NC} Description:\n"
+	echo -e "  This script provides a simple selection menu to launch Android applications."
+	echo -e "  It reads application data from a JSON file and allows launching apps via 'am start'."
+	echo -e "  You can also add, edit or remove applications using the respective commands."
+	echo -e "\n${BC}[?]${NC} Additional Info:\n"
+	echo -e "  ${BG}[S]${NC} symbol means Success."
+	echo -e "  ${BY}[I]${NC} symbol means Information."
+	echo -e "  ${BR}[E]${NC} symbol means Error."
+	echo -e "  ${BC}[?]${NC} symbol means Question/Help."
+	echo
+}
+
+# 'ADD' HELP HANDLER
+add_help() {
+	echo
+	echo -e "${BC}[?]${NC} Usage: $(basename "$0") add [options]"
+	echo -e "\n${BC}[?]${NC} Options:\n"
+	echo -e "  -name		Application name (displayed in menu)"
+	echo -e "  -pkgname	Package name (Android package identifier)"
+	echo -e "  -activity	Full activity path to start the app"
+	echo -e "  -color	ANSI color code (0-255) for menu entry"
+	echo -e "  (none)	Opening the application addition form"
+	echo -e "\n${BC}[?]${NC} Example:\n"
+	echo -e "  $(basename "$0") add -name Messenger -pkgname com.facebook.orca -activity .auth.StartScreenActivity -color 33"
+	echo -e "\n${BC}[?]${NC} Description:\n"
+	echo -e "  Allows you to add new application entry with parameters specified in commandline."
+	echo -e "  If no arguments are provided, a selection menu will be displayed."
+	echo -e "\n${BC}[?]${NC} Additional Info:\n"
+	echo -e "  You can preview ANSI colors using the '256colors' script."
+	echo -e "  Clone the repository with the following command:"
+	echo -e "  ${C}git clone ${URL}https://github.com/BuriXon-code/256colors${NC}"
+	echo
+}
+
+# 'DEL' HELP HANDLER
+del_help() {
+	echo
+	echo -e "${BC}[?]${NC} Usage: $(basename "$0") del [options]"
+	echo -e "\n${BC}[?]${NC} Options:\n"
+	echo -e "  -name		Application name (displayed in menu) to remove"
+	echo -e "  -pkgname	Package name (Android package identifier) to remove"
+	echo -e "  -all		Remove all apps entries"
+	echo -e "  (none)	Opening the application removal selection menu"
+	echo -e "\n${BC}[?]${NC} Example:\n"
+	echo -e "  $(basename "$0") del -name Messenger"
+	echo -e "  $(basename "$0") del -pkgname com.facebook.orca"
+	echo -e "\n${BC}[?]${NC} Description:\n"
+	echo -e "  Allows you to remove an application from the list by specifying its name or package."
+	echo -e "  If no arguments are provided, a selection menu will be displayed."
+	echo
+}
+
+# 'EDIT' HELP HANDLER
+edit_help() {
+	echo
+	echo -e "${BC}[?]${NC} Usage: $(basename "$0") edit [options]"
+	echo -e "\n${BC}[?]${NC} Options:\n"
+	echo -e "  (name)	Edit specified application (app name) in form"
+	echo -e "  (none)	Opening the application edit selection menu"
+	echo -e "\n${BC}[?]${NC} Example:\n"
+	echo -e "  $(basename "$0") edit termux"
+	echo -e "\n${BC}[?]${NC} Description:\n"
+	echo -e "  Allows you to edit an application (name, package name, activity or color)."
+	echo -e "  If no arguments are provided, a selection menu will be displayed."
+	echo -e "\n${BC}[?]${NC} Additional Info:\n"
+	echo -e "  You can preview ANSI colors using the '256colors' script."
+	echo -e "  Clone the repository with the following command:"
+	echo -e "  ${C}git clone ${URL}https://github.com/BuriXon-code/256colors${NC}"
+	echo
+}
+
+info_help() {
+	echo
+	echo -e "${BC}[?]${NC} Usage: $(basename "$0") edit [options]"
+	echo -e "\n${BC}[?]${NC} Options:\n"
+	echo -e "  (name)   Showing detailed info about specified app entry"
+	echo -e "  (none)   Opening the application selection menu and showing info"
+	echo -e "\n${BC}[?]${NC} Example:\n"
+	echo -e "  $(basename "$0") edit termux"
+	echo -e "\n${BC}[?]${NC} Description:\n"
+	echo -e "  Show you detailed information about existing app entry (name, package name, activity and color)."
+	echo -e "  If no arguments are provided, a selection menu will be displayed."
+	echo
+}
+
+# CHECKING DEPENDENCIES
+check_dep() {
+	local missing=()
+	local deps=("jq" "termux-toast" "am")	# DEPENDENT APPS TABLE
+	for dep in "${deps[@]}"; do
+		if ! command -v "$dep" &>/dev/null; then
+			missing+=("$dep")
+		fi
+	done
+	if [ "${#missing[@]}" -gt 0 ]; then
+		echo -e "${BR}[E]${NC} ${R}Missing dependencies: ${missing[*]}${NC}" >&2
+		exit 1
+	fi
+}
+
+# DECLE APP VARIABLES
+load_apps() {
+	local json
+	json=$(cat "$APP_FILE")
+	keys=()
+	values=()
+	while IFS= read -r key; do
+		keys+=("$key")
+		pkg=$(echo "$json" | jq -r --arg key "$key" '.[$key].package')	# DECLARE 'pkg' VARIABLE WITH PKGNAMES 
+		act=$(echo "$json" | jq -r --arg key "$key" '.[$key].activity')	# DECLARE 'act' VARIABLE WITH ACTIVITIES 
+		color=$(echo "$json" | jq -r --arg key "$key" '.[$key].color')	# DECLARE 'color' VARIABLE WITH COLORS 
+		values+=("$pkg/$act:$color")
+	done < <(echo "$json" | jq -r 'keys[]')
+}
+
+# RESTORE CURSOR AND EXIT
+restore_cursor() {
+	echo -e "\e[?25h\r${BY}[I]${NC} ${Y}Operation canceled.${NC}\e[J\n"
+	exit 0
+}
+trap restore_cursor SIGINT	# WORK WITH 'SIGINT' (CTRL+C) SIGNAL -- SHOW CURSOR, DISPLAY MESSAGE AND EXIT
+trap 'echo -en "\e[?25h"' EXIT	# WORK WITH 'EXIT' COMMAND -- SHOW CURSOR
+
+# OPEN APPLICATION
+open_app() {
+	# CHECK IF ANY APP ENTRY EXISTS
+	local choice=0
+	local N=${#keys[@]}
+	[ "$N" -eq 0 ] && { echo -e "\n${BR}[E]${NC} ${R}No apps found.${NC}\n" >&2; exit 1; }
+	# CHECK IF THERE IS ANY PARAMETER
+	if [ -z "$1" ]; then
+		echo -e "\n${BR}[E]${NC} ${R}Application name is required.${NC}\n" >&2
+		exit 1
+	fi
+	# SOME VARIABLES
+	load_apps
+	local app_name="$1"
+	local app_path=""
+	local app_color=""
+	for i in "${!keys[@]}"; do
+		if [ "${keys[$i]}" == "$app_name" ]; then
+			IFS=':' read -r app_path app_color <<< "${values[$i]}"
+			break
+		fi
+	done
+	# CHECK IF SPECIFIED APP EXISTS
+	if [ -z "$app_path" ]; then
+		echo -e "\n${BR}[E]${NC} ${R}No application found with name '$app_name'.${NC}\n" >&2
+		exit 1
+	fi
+	# SHOW TOAST AND OPEN APP THROUGH 'am' COMMAND
+	termux-toast -g bottom "$app_name"
+	echo -e "\n\e[J\e[?25h${BG}[S]${NC} ${G}Opening '$app_name'...${NC}\n"
+	am start --user 0 -n "$app_path" >/dev/null 2>&1 || {
+		# HANDLE ERROR -- NON-EXISTING APP
+		echo -e "${BR}[E]${NC} ${R}Package with activity $app_path does not exist.${NC}" >&2
+		exit 1
+	}
+}
+
+# ADD NEW APP ENTRY
+add_app() {
+	# HANDLE HELP OPTION
+	if [ "$1" == "help" ]; then add_help; echo -en "\e[?25h"; exit 0; fi
+	# SOME VARIABLES
+	local app_name pkg_name act_name color
+	if [ -n "$1" ]; then
+		while [ $# -gt 0 ]; do
+		case "$1" in
+			-name) shift; app_name="$1" ;;
+			-pkgname) shift; pkg_name="$1" ;;
+			-activity) shift; act_name="$1" ;;
+			-color) shift; color="$1" ;;
+		esac
+		shift
+	done
+	else
+		# APP-DATA FORM
+		echo -e "\n${BY}[I]${NC}${Y} Add new app entry...\n${NC}"
+		echo -en "${BC}[?]${NC} App name:${BY} "
+		read app_name
+		echo -en "${BC}[?]${NC} Package name:${BY} "
+		read pkg_name
+		echo -en "${BC}[?]${NC} Activity name:${BY} "
+		read act_name
+		echo -en "${BC}[?]${NC} Color (0-255):${BY} "
+		read color
+	fi
+	# VALIDATE USER INPUT
+	if [ -z "$app_name" ] || [ -z "$pkg_name" ] || [ -z "$act_name" ] || [ -z "$color" ] || [[ ! "$color" =~ ^[0-9]+$ ]] || [ "$color" -lt 0 ] || [ "$color" -gt 255 ]; then
+		echo -e "\n${BR}[E]${NC} ${R}Missing or invalid parameters.${NC}" >&2
+		add_help
+		exit 1
+	fi
+	# ADD NEW APP ENTRY TO CACHE FILE
+	jq --arg name "$app_name" --arg pkg "$pkg_name" --arg act "$act_name" --arg col "$color" \
+	'.[$name] = {"package": $pkg, "activity": $act, "color": $col}' \
+	"$APP_FILE" > "$APP_FILE.tmp" && mv "$APP_FILE.tmp" "$APP_FILE"
+	echo -e "\n${BG}[S]${NC}${G} Added \"$app_name\" to the list.${NC}\n"
+	exit 0
+}
+
+# DELETE APP ENTRY
+delete_app() {
+	# HANDLE HELP OPTION
+	if [ "$1" == "help" ]; then del_help; echo -en "\e[?25h"; exit 0; fi
+	# CHECK IF ANY APP ENTRY EXISTS
+	load_apps
+	local choice=0
+	local N=${#keys[@]}
+	[ "$N" -eq 0 ] && { echo -e "\n${BR}[E]${NC} ${R}No apps found.${NC}\n" >&2; exit 1; }
+	# HANDLE '-name' OPTION
+	if [ "$1" == "-name" ]; then
+		shift
+		# FIND APPS WITH SPECIFIED NAME
+		local matches=()
+		for key in "${keys[@]}"; do
+			[ "$key" == "$1" ] && matches+=("$key")
+		done
+		# NO APP FOUND
+		if [ "${#matches[@]}" -eq 0 ]; then
+			echo -e "\n${BR}[E]${NC} ${R}No application found with name '$1'.${NC}\n" >&2
+			exit 1
+		# MULTIPLE APPS FOUND
+		elif [ "${#matches[@]}" -gt 1 ]; then
+			echo -e "\n${BR}[E]${NC} ${R}More than one application found with name '$1'. Please delete manually.${NC}\n" >&2
+			exit 1
+		# EVERYTHING ALL RIGHT
+		else
+			app_name="${matches[0]}"
+			echo -en "\e[?25h\e[J"
+			echo -en "\n\r${BC}[?]${NC} ${C}Are you sure you want to delete '${BR}$app_name${NC}${C}'? (y/N):${BY} "
+			read -r -n 1 confirm
+			# VALIDATE USER CONFIRMATION
+			if [[ "$confirm" =~ ^[Yy]$ ]]; then
+				jq "del(.\"$1\")" "$APP_FILE" > "$APP_FILE.tmp" && mv "$APP_FILE.tmp" "$APP_FILE"
+				echo -e "\n\n${BG}[S]${NC}${G} Application '$1' deleted.${NC}\n"
+			elif [[ "$confirm" =~ ^[Nn]$ ]]; then
+				echo -e "\n\n${BY}[I]${NC} ${Y}Deletion canceled.${NC}\n" >&2
+				exit 1
+			else
+				echo -e "\n\n${BY}[I]${NC} ${Y}Deletion canceled.${NC}\n" >&2
+				exit 1
+			fi
+			exit 0
+		fi
+	# HANDLE '-pkgname' OPTION
+	elif [ "$1" == "-pkgname" ]; then
+		shift
+		# FIND APPS WITH SPECIFIED NAME
+		local matches=()
+		while IFS= read -r key; do
+			matches+=("$key")
+		done < <(jq -r --arg pkg "$1" 'to_entries[] | select(.value.package == $pkg) | .key' "$APP_FILE")
+		# NO APP FOUND
+		if [ "${#matches[@]}" -eq 0 ]; then
+			echo -e "\n${BR}[E]${NC} ${R}No application found with package name '$1'.${NC}\n" >&2
+			exit 1
+		# MULTIPLE APPS FOUND
+		elif [ "${#matches[@]}" -gt 1 ]; then
+			echo -e "\n${BR}[E]${NC} ${R}More than one application found with package name '$1'. Please delete manually.${NC}\n" >&2
+			exit 1
+		# EVERYTHING ALL RIGHT
+		else
+			app_name="${matches[0]}"
+			echo -en "\e[?25h\e[J"
+			echo -en "\n\r${BC}[?]${NC} ${C}Are you sure you want to delete '${BR}$app_name${NC}${C}'? (y/N):${BY} "
+			read -r -n 1 confirm
+			# VALIDATE USER CONFIRMATION
+			if [[ "$confirm" =~ ^[Yy]$ ]]; then
+				jq "del(.\"$app_name\")" "$APP_FILE" > "$APP_FILE.tmp" && mv "$APP_FILE.tmp" "$APP_FILE"
+				echo -e "\n\n${BG}[S]${NC} ${G} Application '$app_name' deleted.${NC}\n"
+			elif [[ "$confirm" =~ ^[Nn]$ ]]; then
+				echo -e "\n\n${BY}[I]${NC} ${Y}Deletion canceled.${NC}\n" >&2
+				exit 1
+			else
+				echo -e "\n\n${BY}[I]${NC} ${Y}Deletion canceled.${NC}\n" >&2
+				exit 1
+			fi
+			exit 0
+		fi
+	# HANDLE '-all' OPTION
+	elif [ "$1" == "-all" ]; then
+		echo -en "\e[?25h\e[J"
+		echo -en "\n\r${BC}[?]${NC} ${C}Are you sure you want to delete ${BR}all apps${NC}${C}? (y/N):${BY} "
+		read -r -n 1 confirm
+		# VALIDATE USER CONFIRMATION
+		if [[ "$confirm" =~ ^[Yy]$ ]]; then
+			echo "{}" > "$APP_FILE"
+			echo -e "\n\n${BG}[S]${NC} ${G}All applications deleted.${NC}\n"
+		elif [[ "$confirm" =~ ^[Nn]$ ]]; then
+			echo -e "\n\n${BY}[I]${NC} ${Y}Deletion canceled.${NC}\n" >&2
+			exit 1
+		else
+			echo -e "\n\n${BY}[I]${NC} ${Y}Deletion canceled.${NC}\n" >&2
+			exit 1
+		fi
+		exit 0
+	# HANDLE MENU OPTION
+	elif [[ $# -eq 0 ]]; then
+		echo -e "\n\e[?25l${BY}[I]${NC} ${Y}Choose an app to remove:${NC}\n"
+		while true; do
+			# DRAW MENU
+			for i in "${!keys[@]}"; do
+				IFS=':' read -r app_path app_color <<< "${values[$i]}"
+				if [ "$i" -eq "$choice" ]; then
+					echo -e "${BR}  × ${keys[$i]} ×${NC}"
+				else
+					echo -e "    \e[38;5;8m${keys[$i]}\e[K${NC}"
+				fi
+			done
+			# READ ARROWS
+			echo -e "\e[$((N+1))A"
+			read -rsn1 key
+			case "$key" in
+				$'\x1b')
+					read -rsn2 -t 0.1
+					[[ "$REPLY" == "[A" ]] && ((choice=(choice-1+N)%N))
+					[[ "$REPLY" == "[B" ]] && ((choice=(choice+1)%N))
+				;;
+				"")
+					app_name="${keys[$choice]}"
+					# VALIDATE USER CONFIRMATION
+					echo -en "\e[?25h\e[J"
+					echo -en "\r${BC}[?]${NC} ${C}Are you sure you want to delete '${BR}$app_name${NC}${C}'? (y/N):${BY} "
+					read -r -n 1 confirm
+					if [[ "$confirm" =~ ^[Yy]$ ]]; then
+						jq "del(.\"$app_name\")" "$APP_FILE" > "$APP_FILE.tmp" && mv "$APP_FILE.tmp" "$APP_FILE"
+						echo -e "\n\n${BG}[S]${NC} ${G}Application '$app_name' deleted.${NC}\n"
+					elif [[ "$confirm" =~ ^[Nn]$ ]]; then
+						echo -e "\n\n${BY}[I]${NC} ${Y}Deletion canceled.${NC}\n" >&2
+						exit 1
+					else
+						echo -e "\n\n${BY}[I]${NC} ${Y}Deletion canceled.${NC}\n" >&2
+						exit 1
+					fi
+					exit 0
+					;;
+				'q')
+					restore_cursor
+				;;
+			esac
+		done
+	# STUPID USER...
+	else
+		echo -e "\n${BR}[E]${NC} ${R}Missing or invalid parameters.${NC}" >&2
+		del_help
+		exit 1
+	fi
+}
+
+# EDIT APP ENTRY
+edit_app() {
+	# HANDLE HELP OPTION
+	if [ "$1" == "help" ]; then edit_help; echo -en "\e[?25h"; exit 0; fi
+	# CHECK IF ANY APP ENTRY EXISTS
+	load_apps
+	local choice=0
+	local N=${#keys[@]}
+	[ "$N" -eq 0 ] && { echo -e "\n${BR}[E]${NC} ${R}No apps found.${NC}\n" >&2; exit 1; }
+	# HANDLE MENU OPTION
+	if [ "$#" -eq 0 ]; then
+		echo -e "\n\e[?25l${BY}[I]${NC} ${Y}Choose an app to edit:${NC}\n"
+		while true; do
+			# DRAW MENU
+			for i in "${!keys[@]}"; do
+				IFS=':' read -r app_path app_color <<< "${values[$i]}"
+				if [ "$i" -eq "$choice" ]; then
+					echo -e "${BY}  • ${keys[$i]} •${NC}"
+					else
+					echo -e "    \e[38;5;8m${keys[$i]}\e[K${NC}"
+				fi
+			done
+			# READ ARROWS
+			echo -e "\e[$((N+1))A"
+			read -rsn1 key
+			case "$key" in
+			$'\x1b')
+				read -rsn2 -t 0.1
+				[[ "$REPLY" == "[A" ]] && ((choice=(choice-1+N)%N))
+				[[ "$REPLY" == "[B" ]] && ((choice=(choice+1)%N))
+			;;
+			"")
+				app_name="${keys[$choice]}"
+				echo -e "\e[J\e[?25h"
+				break
+			;;
+			'q')
+				restore_cursor
+				exit 0
+			;;
+			esac
+		done
+	# WORK WITH '$@' IF IS SPECIFIED
+	else
+		app_name="$@"
+	fi
+	# DECLARE SELECTED APP DATA
+	local app_data
+	app_data=$(jq -r --arg name "$app_name" '.[$name] // empty' "$APP_FILE")
+	# NO APP FOUND
+	if [ -z "$app_data" ]; then
+		echo -e "\n${BR}[E]${NC} ${R}Application '$app_name' not found.${NC}\n" >&2
+		exit 1
+	fi
+	# SOME VARIABLES
+	local pkg_name act_name color
+	pkg_name=$(jq -r --arg name "$app_name" '.[$name].package' "$APP_FILE")
+	act_name=$(jq -r --arg name "$app_name" '.[$name].activity' "$APP_FILE")
+	color=$(jq -r --arg name "$app_name" '.[$name].color' "$APP_FILE")
+	# OUTPUT DATA
+	echo -e "\e[1A${BY}[I]${NC} Editing '${BY}$app_name${NC}':"
+	echo -e "    ${C}Current package:${NC} $pkg_name"
+	echo -e "    ${C}Current activity:${NC} $act_name"
+	echo -e "    ${C}Current color:${NC} $color\n"
+	# EDITION FORM
+	echo -en "${BC}[?]${NC} New package name (Enter to keep: '$pkg_name'):${BY} "
+	read new_pkg
+	[ -z "$new_pkg" ] && new_pkg="$pkg_name"
+	echo -en "${BC}[?]${NC} New activity name (Enter to keep: '$act_name'):${BY} "
+	read new_act
+	[ -z "$new_act" ] && new_act="$act_name"
+	echo -en "${BC}[?]${NC} New color (0-255, Enter to keep: '$color'):${BY} "
+	read new_color
+	# USER INPUT VALIDATION
+	if [ -z "$new_color" ] || [[ ! "$new_color" =~ ^[0-9]+$ ]] || [ "$new_color" -lt 0 ] || [ "$new_color" -gt 255 ]; then
+		new_color="$color"
+	fi
+	# WRITE NEW DATA TO CACHE FILE
+	jq --arg name "$app_name" --arg pkg "$new_pkg" --arg act "$new_act" --arg col "$new_color" \
+	'.[$name].package = $pkg | .[$name].activity = $act | .[$name].color = $col' \
+	"$APP_FILE" > "$APP_FILE.tmp" && mv "$APP_FILE.tmp" "$APP_FILE"
+	echo -e "\n${BG}[S]${NC} ${G}Updated application '$app_name'.${NC}\n"
+	exit 0
+}
+
+# SHOW APP DETAILS
+show_info() {
+	# HANDLE HELP OPTION
+	if [ "$1" == "help" ]; then info_help; echo -en "\e[?25h"; exit 0; fi
+	# CHECK IF ANY APP ENTRY EXISTS
+        load_apps
+	local choice=0
+	local N=${#keys[@]}
+	[ "$N" -eq 0 ] && { echo -e "\n${BR}[E]${NC} ${R}No apps found.${NC}\n" >&2; exit 1; }
+	# IF NO PARAMETERS SPECIFIED, SHOW MENU
+        if [ -z "$1" ]; then
+                echo -e "\n\e[?25l${BY}[I]${NC} ${Y}Choose an app to view details:${NC}\n"
+                while true; do
+			# DRAW MENU
+                        for i in "${!keys[@]}"; do
+				if [ "$i" -eq "$choice" ]; then
+                                        echo -e "  \e[38;5;${values[$i]##*:}m> ${keys[$i]} <\e[0m"
+                                else
+                                        echo -e "    \e[38;5;8m${keys[$i]}${NC}\e[K"
+                                fi
+                        done
+			# READ ARROWS
+                        echo -e "\e[$((N+1))A"
+                        read -rsn1 key
+                        case "$key" in
+                                $'\x1b')
+                                read -rsn2 -t 0.1
+                                [[ "$REPLY" == "[A" ]] && ((choice=(choice-1+N)%N))
+                                [[ "$REPLY" == "[B" ]] && ((choice=(choice+1)%N))
+                                ;;
+                                "")
+                                app_name="${keys[$choice]}"
+                                break
+                                ;;
+                                'q')
+                                restore_cursor
+                                ;;
+                        esac
+            	done
+	# WORK WITH '$@' IF IS SPECIFIED
+        else
+                app_name="$@"
+        fi
+	# DECLARE SELECTED APP DATA
+        local app_data
+        app_data=$(jq -r --arg name "$app_name" '.[$name] // empty' "$APP_FILE")
+	# NO APP FOUND
+        if [ -z "$app_data" ] || [ "$app_data" == "null" ]; then
+                echo -e "\n${BR}[E]${NC} ${R}No application found with name '$app_name'.${NC}\n" >&2
+                exit 1
+        fi
+	# SOME VARIABLES
+        local pkg_name act_name color
+        pkg_name=$(jq -r --arg name "$app_name" '.[$name].package' "$APP_FILE")
+        act_name=$(jq -r --arg name "$app_name" '.[$name].activity' "$APP_FILE")
+        color=$(jq -r --arg name "$app_name" '.[$name].color' "$APP_FILE")
+	# DISPLAY APP INFO
+        echo -e "\r${BY}[I]${NC} ${Y}Application Details:${NC}\e[J\n"
+        echo -e "  ${BG}Name:${NC}     ${BY}$app_name${NC}"
+        echo -e "  ${BG}Package:${NC}  ${C}$pkg_name${NC}"
+        echo -e "  ${BG}Activity:${NC} ${C}$act_name${NC}"
+        echo -e "  ${BG}Color:${NC}    \e[38;5;${color}m$color${NC}\n"
+}
+
+# SHOW INTERACTIVE MENU
+menu() {
+	# CHECK IF ANY APP ENTRY EXISTS
+	load_apps
+	local choice=0
+	local N=${#keys[@]}
+	[ "$N" -eq 0 ] && { echo -e "\n${BR}[E]${NC} ${R}No apps found.${NC}\n"; exit 1; }
+	# OPEN SELECTION MENU
+	echo -e "\n\e[?25l${BY}[I]${NC} ${Y}Choose an app to open:${NC}\n"
+	while true; do
+		# DRAW MENU
+		for i in "${!keys[@]}"; do
+			IFS=':' read -r app_path app_color <<< "${values[$i]}"
+			if [ "$i" -eq "$choice" ]; then
+				echo -e "  \e[38;5;${app_color}m> ${keys[$i]} <\e[0m"
+				else
+				echo -e "    \e[38;5;8m${keys[$i]}${NC}  "
+			fi
+		done
+		# READ ARROWS
+		echo -e "\e[$((N+1))A"
+		read -rsn1 key
+		case "$key" in
+			$'\x1b')
+			read -rsn2 -t 0.1
+			[[ "$REPLY" == "[A" ]] && ((choice=(choice-1+N)%N))
+			[[ "$REPLY" == "[B" ]] && ((choice=(choice+1)%N))
+			;;
+			"")
+			app_name="${keys[$choice]}"
+			IFS=':' read -r app_path app_color <<< "${values[$choice]}"
+			# SHOW TOAST AND OPEN APP THROUGH 'am' COMMAND
+			termux-toast -g bottom "$app_name"
+			echo -e "\e[J\e[?25h${BG}[S]${NC} ${G}Done!${NC}\n"
+			am start --user 0 -n "$app_path" >/dev/null 2>&1 || {
+				echo -e "${BR}[E]${NC} ${R}Package with activity $app_path does not exists.${NC}" >&2
+				exit 1
+			}
+			exit 0
+			;;
+			'q')
+				restore_cursor
+			;;
+		esac
+	done
+}
+
+# OPTION SELECTOR
+case "$1" in
+	help) check_dep; help_menu; exit 0;; # SHOW HELP
+	add) check_dep; shift; add_app "$@"; exit 0 ;; # GO TO ADD MODE
+	del) check_dep; shift; delete_app "$@"; exit 0 ;; # GO TO DEL MODE
+	open) check_dep; shift; open_app "$@"; exit 0;; # GO TO OPEN MODE
+	edit) check_dep; shift; edit_app "$@"; exit 0 ;; # GO TO EDIT MODE
+	info) check_dep; shift; show_info "$@"; exit 0;; # GO TO INFO MODE
+	"") check_dep; menu; exit 0 ;; # EMPTY
+	*)
+		# HANDLE USER STUPIDITY
+		echo -e "\n${BR}[E]${NC} ${R}Unknown option '$1'.${NC}" >&2
+		help_menu
+		exit 1
+	;;
+esac
