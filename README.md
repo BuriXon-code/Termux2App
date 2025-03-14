@@ -59,7 +59,7 @@ termux2app add
 You will be prompted to enter:
 - **Application Name**
 - **Package Name** ( from `pm list packages` )
-- **Activity Name** ( from `dumpsys package` | if Termux have "DUMP" permission )
+- **Activity Name** ( from `dumpsys package` | if Termux has "DUMP" permission )
 - **Color Code** ( 0-255 | you can preview colors using my [256colors](https://github.com/BuriXon-code/256colors) script )
 
 ### Usage - Delete an Application
