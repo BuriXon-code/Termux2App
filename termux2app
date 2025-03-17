@@ -1,5 +1,9 @@
 #!/data/data/com.termux/files/usr/bin/bash
 
+# Termux2App made by BuriXon-code (c) 2025
+# version 1.0
+# Interactive Android app launcher
+
 # DECLARE CACHE FILE
 APP_FILE="$HOME/.cache/BuriXon-code/apk/apps.json"
 mkdir -p "$(dirname "$APP_FILE")"
